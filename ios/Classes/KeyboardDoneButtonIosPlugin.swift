@@ -257,9 +257,17 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
 
     container.translatesAutoresizingMaskIntoConstraints = false
 
-    // Opaque keyboard-matching background.
-    container.backgroundColor = keyboardBackgroundColor
-    container.isOpaque = true
+    container.backgroundColor = UIColor(
+      red: 210.0 / 255.0,
+      green: 211.0 / 255.0,
+      blue: 216.0 / 255.0,
+      alpha: 0.7
+    )
+
+    container.isOpaque = false
+
+    container.layer.cornerRadius = 0
+    container.layer.masksToBounds = false
 
     // Keep the container rectangular.
     container.layer.cornerRadius = 0
