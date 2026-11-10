@@ -104,9 +104,6 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
   // MARK: - Show / Hide Requests
 
   private func showDoneButton() {
-  print("[KeyboardDone] showDoneButton called")
-    print("[KeyboardDone] keyboardIsVisible: \(keyboardIsVisible)")
-    print("[KeyboardDone] pendingToolbarRequest: \(pendingToolbarRequest)")
     guard UIDevice.current.userInterfaceIdiom != .pad else {
       return
     }
@@ -139,9 +136,6 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
   // MARK: - Keyboard Handlers
 
   @objc private func keyboardWillShow(_ notification: Notification) {
-  print("[KeyboardDone] keyboardWillShow received")
-  print("[KeyboardDone] pending: \(pendingToolbarRequest)")
-  print("[KeyboardDone] active: \(isToolbarActive)")
     guard
       let keyboardFrame = notification.userInfo?[
         UIResponder.keyboardFrameEndUserInfoKey
@@ -267,7 +261,7 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
       red: 210.0 / 255.0,
       green: 211.0 / 255.0,
       blue: 216.0 / 255.0,
-      alpha: 0.0,
+      alpha: 0.7,
     )
 
     container.isOpaque = false
