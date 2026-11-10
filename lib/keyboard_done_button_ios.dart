@@ -1,19 +1,20 @@
+
 import 'dart:io';
+
 import 'package:flutter/widgets.dart';
+
 import 'keyboard_done_button_ios_platform_interface.dart';
 
-/// Utility class for controlling the keyboard Done button toolbar
+/// Utility class for controlling the keyboard Done button toolbar.
 class KeyboardToolbar {
-  /// Show the Done button toolbar above the keyboard
-  /// Call this when a TextField with number keyboard gains focus
+  /// Shows the Done button toolbar above the keyboard.
   static Future<void> show() async {
     if (Platform.isIOS) {
       await KeyboardDoneButtonIosPlatform.instance.showDoneButton();
     }
   }
 
-  /// Hide the Done button toolbar
-  /// Call this when a TextField without toolbar gains focus
+  /// Hides the Done button toolbar.
   static Future<void> hide() async {
     if (Platform.isIOS) {
       await KeyboardDoneButtonIosPlatform.instance.hideDoneButton();
@@ -21,29 +22,26 @@ class KeyboardToolbar {
   }
 }
 
-/// A widget that automatically shows/hides the keyboard Done button toolbar
-/// based on focus state.
+/// A widget that automatically shows or hides the keyboard Done button
+/// toolbar based on the focus state of its child.
 ///
-/// Wrap your TextField or TextFormField with this widget to automatically
-/// manage the toolbar visibility.
+/// If a [FocusNode] is provided, the widget observes that node without
+/// attaching it to another [Focus] widget.
 ///
-/// Example:
-/// ```dart
-/// KeyboardToolbarField(
-///   child: TextField(
-///     keyboardType: TextInputType.number,
-///   ),
-/// )
-/// ```
+/// If no [FocusNode] is provided, the widget creates and manages its
+/// own [FocusNode].
 class KeyboardToolbarField extends StatefulWidget {
-  /// The child widget (typically a TextField or TextFormField)
+  /// The child widget, typically a TextField or TextFormField.
   final Widget child;
 
-  /// Whether to show the toolbar when this field is focused.
+  /// Whether to show the toolbar when the field is focused.
+  ///
   /// Defaults to true.
   final bool showToolbar;
 
-  /// Optional FocusNode. If not provided, one will be created internally.
+  /// Optional FocusNode.
+  ///
+  /// If not provided, a FocusNode will be created internally.
   final FocusNode? focusNode;
 
   const KeyboardToolbarField({
@@ -54,7 +52,8 @@ class KeyboardToolbarField extends StatefulWidget {
   });
 
   @override
-  State<KeyboardToolbarField> createState() => _KeyboardToolbarFieldState();
+  State<KeyboardToolbarField> createState() =>
+      _KeyboardToolbarFieldState();
 }
 
 class _KeyboardToolbarFieldState extends State<KeyboardToolbarField> {
@@ -67,15 +66,7 @@ class _KeyboardToolbarFieldState extends State<KeyboardToolbarField> {
     _initFocusNode();
   }
 
-  @override
-  void dispose() {
-    _focusNode.removeListener(_onFocusChange);
-    if (_ownsNode) {
-      _focusNode.dispose();
-    }
-    super.dispose();
-  }
-
+  /// Initializes the FocusNode and registers its listener.
   void _initFocusNode() {
     if (widget.focusNode != null) {
       _focusNode = widget.focusNode!;
@@ -84,33 +75,72 @@ class _KeyboardToolbarFieldState extends State<KeyboardToolbarField> {
       _focusNode = FocusNode();
       _ownsNode = true;
     }
+
     _focusNode.addListener(_onFocusChange);
   }
 
   @override
-  void didUpdateWidget(KeyboardToolbarField oldWidget) {
+  void didUpdateWidget(covariant KeyboardToolbarField oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Handle FocusNode changes.
     if (widget.focusNode != oldWidget.focusNode) {
       _focusNode.removeListener(_onFocusChange);
+
       if (_ownsNode) {
         _focusNode.dispose();
       }
+
       _initFocusNode();
+    }
+
+    // Handle showToolbar changes while the field is focused.
+    if (widget.showToolbar != oldWidget.showToolbar &&
+        _focusNode.hasFocus) {
+      _updateToolbar();
     }
   }
 
+  /// Called whenever the FocusNode changes.
   void _onFocusChange() {
-    if (_focusNode.hasFocus) {
-      if (widget.showToolbar) {
-        KeyboardToolbar.show();
-      } else {
-        KeyboardToolbar.hide();
-      }
+    _updateToolbar();
+  }
+
+  /// Updates native toolbar visibility based on the current focus state.
+  void _updateToolbar() {
+    if (_focusNode.hasFocus && widget.showToolbar) {
+      KeyboardToolbar.show();
+    } else {
+      KeyboardToolbar.hide();
     }
   }
 
   @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+
+    // Only dispose FocusNodes created by this widget.
+    if (_ownsNode) {
+      _focusNode.dispose();
+    }
+
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Focus(focusNode: _focusNode, child: widget.child);
+    // When an external FocusNode is supplied, the child (TextField or
+    // TextFormField) already attaches that node to the focus tree.
+    // Do not attach the same node to another Focus widget.
+    if (widget.focusNode != null) {
+      return widget.child;
+    }
+
+    // When no external FocusNode is supplied, use our internally
+    // managed FocusNode to observe focus changes.
+    return Focus(
+      focusNode: _focusNode,
+      child: widget.child,
+    );
   }
 }
