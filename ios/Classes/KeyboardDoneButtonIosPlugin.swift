@@ -7,16 +7,21 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
   // MARK: - Properties
 
   private var toolbarWindow: UIWindow?
-  private var toolbar: UIToolbar?
+  private var toolbarContainer: UIView?
+  private var doneButton: UIButton?
 
   private var pendingToolbarRequest = false
   private var isObserversRegistered = false
   private var isToolbarActive = false
 
-  // Keyboard state
   private var keyboardIsVisible = false
   private var currentKeyboardFrame: CGRect = .zero
   private var lastScreenBounds: CGRect = .zero
+
+  private let toolbarHeight: CGFloat = 56
+  private let buttonWidth: CGFloat = 72
+  private let buttonHeight: CGFloat = 36
+  private let buttonRightPadding: CGFloat = 16
 
   // MARK: - Plugin Registration
 
@@ -82,7 +87,8 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
 
     pendingToolbarRequest = true
 
-    // Handle requests made after the keyboard is already visible.
+    // The keyboard might already be visible when Flutter requests
+    // the Done button.
     if keyboardIsVisible && currentKeyboardFrame != .zero {
       isToolbarActive = true
 
@@ -174,201 +180,185 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
     hideToolbar(duration: duration)
   }
 
-  // MARK: - Toolbar Creation
+  // MARK: - Create Done Button
 
-  private func createToolbar() -> UIToolbar {
-    let toolbar = UIToolbar()
+  private func createDoneButton() -> UIButton {
+    let button = UIButton(type: .custom)
 
-    toolbar.barStyle = .default
-    toolbar.isTranslucent = false
-    toolbar.backgroundColor = .systemBackground
-    toolbar.isOpaque = true
-    toolbar.autoresizingMask = [.flexibleWidth]
+    button.translatesAutoresizingMaskIntoConstraints = false
 
-    // Custom toolbar appearance.
-    toolbar.setBackgroundImage(
-      UIImage(),
-      forToolbarPosition: .any,
-      barMetrics: .default
-    )
-
-    toolbar.setShadowImage(
-      UIImage(),
-      forToolbarPosition: .any
-    )
-
-    // Flexible space pushes the Done button to the right.
-    let flexSpace = UIBarButtonItem(
-      barButtonSystemItem: .flexibleSpace,
-      target: nil,
-      action: nil
-    )
-
-    // Custom Done button.
-    let doneButton = UIButton(type: .custom)
-
-    doneButton.frame = CGRect(
-      x: 0,
-      y: 0,
-      width: 72,
-      height: 36
-    )
-
-    doneButton.setTitle("Done", for: .normal)
-    doneButton.setTitleColor(.white, for: .normal)
-
-    doneButton.titleLabel?.font = UIFont.systemFont(
-      ofSize: 15,
-      weight: .semibold
-    )
-
-    doneButton.backgroundColor = UIColor(
+    button.backgroundColor = UIColor(
       red: 35.0 / 255.0,
       green: 103.0 / 255.0,
       blue: 209.0 / 255.0,
       alpha: 1.0
     )
 
-    doneButton.layer.cornerRadius = 8
-    doneButton.layer.masksToBounds = true
+    button.setTitle("Done", for: .normal)
+    button.setTitleColor(.white, for: .normal)
 
-    doneButton.contentHorizontalAlignment = .center
-    doneButton.contentVerticalAlignment = .center
+    button.titleLabel?.font = UIFont.systemFont(
+      ofSize: 15,
+      weight: .semibold
+    )
 
-    doneButton.addTarget(
+    button.layer.cornerRadius = 8
+    button.layer.masksToBounds = true
+
+    button.addTarget(
       self,
       action: #selector(doneButtonTapped),
       for: .touchUpInside
     )
 
-    doneButton.accessibilityLabel = "Done"
-    doneButton.accessibilityIdentifier = "keyboardDoneButton"
+    button.accessibilityLabel = "Done"
+    button.accessibilityIdentifier = "keyboardDoneButton"
 
-    let doneBarButton = UIBarButtonItem(
-      customView: doneButton
+    NSLayoutConstraint.activate([
+      button.widthAnchor.constraint(equalToConstant: buttonWidth),
+      button.heightAnchor.constraint(equalToConstant: buttonHeight)
+    ])
+
+    return button
+  }
+
+  // MARK: - Create Toolbar Container
+
+  private func createToolbarContainer() -> UIView {
+    let container = UIView()
+
+    container.translatesAutoresizingMaskIntoConstraints = false
+
+    // Diagnostic background.
+    container.backgroundColor = .systemBackground
+    container.isOpaque = true
+
+    let button = createDoneButton()
+
+    container.addSubview(button)
+
+    NSLayoutConstraint.activate([
+      button.trailingAnchor.constraint(
+        equalTo: container.trailingAnchor,
+        constant: -buttonRightPadding
+      ),
+
+      button.centerYAnchor.constraint(
+        equalTo: container.centerYAnchor
+      )
+    ])
+
+    self.doneButton = button
+
+    return container
+  }
+
+  // MARK: - Create Native Window
+
+  private func createToolbarWindow() -> UIWindow {
+    let window: UIWindow
+
+    if #available(iOS 13.0, *) {
+      let activeScene = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .first { $0.activationState == .foregroundActive }
+
+      if let activeScene = activeScene {
+        window = UIWindow(windowScene: activeScene)
+      } else {
+        window = UIWindow(frame: .zero)
+      }
+    } else {
+      window = UIWindow(frame: .zero)
+    }
+
+    let rootViewController = UIViewController()
+
+    rootViewController.view.backgroundColor = .clear
+    rootViewController.view.isOpaque = false
+
+    window.rootViewController = rootViewController
+
+    window.windowLevel = UIWindow.Level(
+      rawValue: UIWindow.Level.alert.rawValue - 1
     )
 
-    let fixedSpace = UIBarButtonItem(
-      barButtonSystemItem: .fixedSpace,
-      target: nil,
-      action: nil
-    )
+    window.backgroundColor = .clear
+    window.isOpaque = false
+    window.isUserInteractionEnabled = true
 
-    fixedSpace.width = 16
-
-    toolbar.items = [
-      flexSpace,
-      doneBarButton,
-      fixedSpace
-    ]
-
-    toolbar.sizeToFit()
-
-    return toolbar
+    return window
   }
 
   // MARK: - Show Toolbar
 
   private func showToolbar(
-    toKeyboardFrame endFrame: CGRect,
+    toKeyboardFrame keyboardFrame: CGRect,
     duration: TimeInterval,
     animationCurve: UIView.AnimationOptions
   ) {
-    if toolbar == nil {
-      toolbar = createToolbar()
+    if toolbarWindow == nil {
+      toolbarWindow = createToolbarWindow()
     }
 
-    if toolbarWindow == nil {
-      let window: UIWindow
+    if toolbarContainer == nil {
+      let container = createToolbarContainer()
 
-      if #available(iOS 13.0, *) {
-        let activeScene = UIApplication.shared.connectedScenes
-          .compactMap { $0 as? UIWindowScene }
-          .first { $0.activationState == .foregroundActive }
+      toolbarContainer = container
 
-        if let activeScene = activeScene {
-          window = UIWindow(windowScene: activeScene)
-        } else {
-          window = UIWindow(frame: .zero)
-        }
-      } else {
-        window = UIWindow(frame: .zero)
+      guard let rootView = toolbarWindow?.rootViewController?.view else {
+        return
       }
 
-      window.windowLevel = UIWindow.Level(
-        rawValue: UIWindow.Level.alert.rawValue - 1
-      )
+      rootView.addSubview(container)
 
-      window.backgroundColor = .systemBackground
-      window.isOpaque = true
-      window.isUserInteractionEnabled = true
+      NSLayoutConstraint.activate([
+        container.leadingAnchor.constraint(
+          equalTo: rootView.leadingAnchor
+        ),
 
-      toolbarWindow = window
-    } else {
-      toolbarWindow?.layer.removeAllAnimations()
+        container.trailingAnchor.constraint(
+          equalTo: rootView.trailingAnchor
+        ),
+
+        container.topAnchor.constraint(
+          equalTo: rootView.topAnchor
+        ),
+
+        container.bottomAnchor.constraint(
+          equalTo: rootView.bottomAnchor
+        )
+      ])
     }
 
-    guard
-      let toolbarWindow = toolbarWindow,
-      let toolbar = toolbar
-    else {
+    guard let toolbarWindow = toolbarWindow else {
       return
     }
 
-    // Diagnostic background styling.
-    toolbarWindow.backgroundColor = .systemBackground
-    toolbarWindow.isOpaque = true
-
-    toolbar.backgroundColor = .systemBackground
-    toolbar.isOpaque = true
+    toolbarWindow.layer.removeAllAnimations()
 
     let screenWidth = UIScreen.main.bounds.width
-    let toolbarHeight = toolbar.frame.height
 
-    let finalY = endFrame.origin.y - toolbarHeight
+    let finalY = keyboardFrame.origin.y - toolbarHeight
 
-    if toolbar.superview == nil {
-      toolbar.frame = CGRect(
-        x: 0,
-        y: 0,
-        width: screenWidth,
-        height: toolbarHeight
-      )
-
-      toolbarWindow.addSubview(toolbar)
-    }
-
-    toolbar.frame = CGRect(
+    let finalFrame = CGRect(
       x: 0,
-      y: 0,
+      y: finalY,
       width: screenWidth,
       height: toolbarHeight
     )
 
-    // Avoid flickering when already visible.
     let isAlreadyVisible =
       !toolbarWindow.isHidden &&
       toolbarWindow.alpha == 1
 
     if isAlreadyVisible {
-      toolbarWindow.frame = CGRect(
-        x: 0,
-        y: finalY,
-        width: screenWidth,
-        height: toolbarHeight
-      )
-
+      toolbarWindow.frame = finalFrame
       return
     }
 
     UIView.performWithoutAnimation {
-      toolbarWindow.frame = CGRect(
-        x: 0,
-        y: finalY,
-        width: screenWidth,
-        height: toolbarHeight
-      )
-
+      toolbarWindow.frame = finalFrame
       toolbarWindow.alpha = 0
       toolbarWindow.isHidden = false
     }
@@ -388,6 +378,8 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
 
   private func hideToolbar(duration: TimeInterval = 0.25) {
     guard let toolbarWindow = toolbarWindow else { return }
+
+    toolbarWindow.layer.removeAllAnimations()
 
     UIView.animate(
       withDuration: duration,
