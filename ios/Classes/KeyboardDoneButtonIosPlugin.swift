@@ -82,9 +82,7 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
 
     pendingToolbarRequest = true
 
-    // Important:
-    // The keyboard may already be visible when Flutter requests
-    // the toolbar. In that case, keyboardWillShow will not fire again.
+    // Handle requests made after the keyboard is already visible.
     if keyboardIsVisible && currentKeyboardFrame != .zero {
       isToolbarActive = true
 
@@ -182,11 +180,12 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
     let toolbar = UIToolbar()
 
     toolbar.barStyle = .default
-    toolbar.isTranslucent = true
-    toolbar.backgroundColor = .clear
+    toolbar.isTranslucent = false
+    toolbar.backgroundColor = .systemBackground
+    toolbar.isOpaque = true
     toolbar.autoresizingMask = [.flexibleWidth]
 
-    // Remove the default toolbar background.
+    // Custom toolbar appearance.
     toolbar.setBackgroundImage(
       UIImage(),
       forToolbarPosition: .any,
@@ -205,8 +204,7 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
       action: nil
     )
 
-    // Custom button.
-    // Use .custom to avoid the system button appearance.
+    // Custom Done button.
     let doneButton = UIButton(type: .custom)
 
     doneButton.frame = CGRect(
@@ -301,7 +299,8 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
         rawValue: UIWindow.Level.alert.rawValue - 1
       )
 
-      window.backgroundColor = .clear
+      window.backgroundColor = .systemBackground
+      window.isOpaque = true
       window.isUserInteractionEnabled = true
 
       toolbarWindow = window
@@ -315,6 +314,13 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
     else {
       return
     }
+
+    // Diagnostic background styling.
+    toolbarWindow.backgroundColor = .systemBackground
+    toolbarWindow.isOpaque = true
+
+    toolbar.backgroundColor = .systemBackground
+    toolbar.isOpaque = true
 
     let screenWidth = UIScreen.main.bounds.width
     let toolbarHeight = toolbar.frame.height
@@ -339,7 +345,7 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
       height: toolbarHeight
     )
 
-    // Avoid flickering when the toolbar is already visible.
+    // Avoid flickering when already visible.
     let isAlreadyVisible =
       !toolbarWindow.isHidden &&
       toolbarWindow.alpha == 1
