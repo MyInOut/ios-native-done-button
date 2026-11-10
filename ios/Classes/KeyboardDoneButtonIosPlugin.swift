@@ -1,52 +1,61 @@
+
 import Flutter
 import UIKit
 
-/// Flutter plugin that displays a "Done" button toolbar above the iOS keyboard
 public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
 
-  // MARK: - 🔒 Properties ------------------------------------------------- //
+  // MARK: - Properties
 
   private var toolbarWindow: UIWindow?
   private var toolbar: UIToolbar?
-  /// One-shot flag: shows toolbar on next keyboardWillShow, then auto-resets
+
   private var pendingToolbarRequest = false
   private var isObserversRegistered = false
-  /// Tracks if toolbar is currently active (for rotation detection)
   private var isToolbarActive = false
-  /// Last known screen bounds (for rotation detection)
+
+  // Keyboard state
+  private var keyboardIsVisible = false
+  private var currentKeyboardFrame: CGRect = .zero
   private var lastScreenBounds: CGRect = .zero
 
-  // MARK: - 🔌 Plugin Registration ---------------------------------------- //
+  // MARK: - Plugin Registration
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
       name: "keyboard_done_button_ios",
-      binaryMessenger: registrar.messenger())
+      binaryMessenger: registrar.messenger()
+    )
 
     let instance = KeyboardDoneButtonIosPlugin()
     instance.registerKeyboardObservers()
+
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
 
-  // MARK: - 📨 Flutter Method Handler ------------------------------------- //
+  // MARK: - Flutter Method Handler
 
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+  public func handle(
+    _ call: FlutterMethodCall,
+    result: @escaping FlutterResult
+  ) {
     switch call.method {
     case "showDoneButton":
       showDoneButton()
       result(true)
+
     case "hideDoneButton":
       hideDoneButton()
       result(true)
+
     default:
       result(FlutterMethodNotImplemented)
     }
   }
 
-  // MARK: - ⚙️ Setup ------------------------------------------------------ //
+  // MARK: - Keyboard Observers
 
   private func registerKeyboardObservers() {
-    guard UIDevice.current.userInterfaceIdiom != .pad else { return }  // Skip iPad
+    guard UIDevice.current.userInterfaceIdiom != .pad else { return }
     guard !isObserversRegistered else { return }
 
     NotificationCenter.default.addObserver(
@@ -66,36 +75,63 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
     isObserversRegistered = true
   }
 
-  // ************************************************************************ //
+  // MARK: - Show / Hide Requests
 
   private func showDoneButton() {
-    guard UIDevice.current.userInterfaceIdiom != .pad else { return }  // Skip iPad
+    guard UIDevice.current.userInterfaceIdiom != .pad else { return }
+
     pendingToolbarRequest = true
+
+    // Important:
+    // The keyboard may already be visible when Flutter requests
+    // the toolbar. In that case, keyboardWillShow will not fire again.
+    if keyboardIsVisible && currentKeyboardFrame != .zero {
+      isToolbarActive = true
+
+      showToolbar(
+        toKeyboardFrame: currentKeyboardFrame,
+        duration: 0.15,
+        animationCurve: .curveEaseInOut
+      )
+    }
   }
 
   private func hideDoneButton() {
-    guard UIDevice.current.userInterfaceIdiom != .pad else { return }  // Skip iPad
+    guard UIDevice.current.userInterfaceIdiom != .pad else { return }
+
     pendingToolbarRequest = false
     isToolbarActive = false
+
     hideToolbar()
   }
 
-  // MARK: - ⌨️ Keyboard Handlers ------------------------------------------ //
+  // MARK: - Keyboard Handlers
 
   @objc private func keyboardWillShow(_ notification: Notification) {
     guard
-      let keyboardFrameEnd = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
-        as? CGRect
-    else { return }
+      let keyboardFrame = notification.userInfo?[
+        UIResponder.keyboardFrameEndUserInfoKey
+      ] as? CGRect
+    else {
+      return
+    }
 
-    // Detect rotation by comparing screen bounds
+    keyboardIsVisible = true
+    currentKeyboardFrame = keyboardFrame
+
+    // Detect screen rotation.
     let currentScreenBounds = UIScreen.main.bounds
+
     let didRotate =
-      isToolbarActive && lastScreenBounds != .zero && lastScreenBounds != currentScreenBounds
+      isToolbarActive &&
+      lastScreenBounds != .zero &&
+      lastScreenBounds != currentScreenBounds
+
     lastScreenBounds = currentScreenBounds
 
-    // Show toolbar if: explicit request OR rotation OR toolbar already active
-    let shouldShowToolbar = pendingToolbarRequest || didRotate || isToolbarActive
+    let shouldShowToolbar =
+      pendingToolbarRequest || didRotate || isToolbarActive
+
     pendingToolbarRequest = false
 
     guard shouldShowToolbar else {
@@ -104,108 +140,136 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
       return
     }
 
-    guard
-      let animationDuration = notification.userInfo?[
-        UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval,
-      let animationCurveRaw = notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey]
-        as? NSNumber
-    else { return }
+    let animationDuration =
+      notification.userInfo?[
+        UIResponder.keyboardAnimationDurationUserInfoKey
+      ] as? TimeInterval ?? 0.25
 
-    let animationCurve = UIView.AnimationOptions(rawValue: animationCurveRaw.uintValue << 16)
+    let animationCurveRaw =
+      notification.userInfo?[
+        UIResponder.keyboardAnimationCurveUserInfoKey
+      ] as? NSNumber ?? NSNumber(value: 7)
+
+    let animationCurve = UIView.AnimationOptions(
+      rawValue: animationCurveRaw.uintValue << 16
+    )
 
     isToolbarActive = true
+
     showToolbar(
-      toKeyboardFrame: keyboardFrameEnd,
+      toKeyboardFrame: keyboardFrame,
       duration: animationDuration,
-      animationCurve: animationCurve)
+      animationCurve: animationCurve
+    )
   }
 
-  // ************************************************************************ //
-
   @objc private func keyboardWillHide(_ notification: Notification) {
+    keyboardIsVisible = false
+    currentKeyboardFrame = .zero
+    isToolbarActive = false
+
     let duration =
       notification.userInfo?[
-        UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval ?? 0.25
+        UIResponder.keyboardAnimationDurationUserInfoKey
+      ] as? TimeInterval ?? 0.25
 
     hideToolbar(duration: duration)
   }
 
-  // MARK: - 🔨 Toolbar Creation ------------------------------------------- //
+  // MARK: - Toolbar Creation
 
-
-private func createToolbar() -> UIToolbar {
+  private func createToolbar() -> UIToolbar {
     let toolbar = UIToolbar()
+
     toolbar.barStyle = .default
+    toolbar.isTranslucent = true
+    toolbar.backgroundColor = .clear
     toolbar.autoresizingMask = [.flexibleWidth]
+
+    // Remove the default toolbar background.
+    toolbar.setBackgroundImage(
+      UIImage(),
+      forToolbarPosition: .any,
+      barMetrics: .default
+    )
+
+    toolbar.setShadowImage(
+      UIImage(),
+      forToolbarPosition: .any
+    )
 
     // Flexible space pushes the Done button to the right.
     let flexSpace = UIBarButtonItem(
-        barButtonSystemItem: .flexibleSpace,
-        target: nil,
-        action: nil
+      barButtonSystemItem: .flexibleSpace,
+      target: nil,
+      action: nil
     )
 
-    // Custom Done button.
-    let doneButton = UIButton(type: .system)
+    // Custom button.
+    // Use .custom to avoid the system button appearance.
+    let doneButton = UIButton(type: .custom)
 
     doneButton.frame = CGRect(
-        x: 0,
-        y: 0,
-        width: 72,
-        height: 36
+      x: 0,
+      y: 0,
+      width: 72,
+      height: 36
     )
 
     doneButton.setTitle("Done", for: .normal)
     doneButton.setTitleColor(.white, for: .normal)
 
     doneButton.titleLabel?.font = UIFont.systemFont(
-        ofSize: 15,
-        weight: .semibold
+      ofSize: 15,
+      weight: .semibold
     )
 
-    // Replace this with the exact myinout ThemeColors.blue value.
     doneButton.backgroundColor = UIColor(
-        red: 35.0 / 255.0,
-        green: 103.0 / 255.0,
-        blue: 209.0 / 255.0,
-        alpha: 1.0
+      red: 35.0 / 255.0,
+      green: 103.0 / 255.0,
+      blue: 209.0 / 255.0,
+      alpha: 1.0
     )
 
     doneButton.layer.cornerRadius = 8
-    doneButton.clipsToBounds = true
+    doneButton.layer.masksToBounds = true
+
+    doneButton.contentHorizontalAlignment = .center
+    doneButton.contentVerticalAlignment = .center
 
     doneButton.addTarget(
-        self,
-        action: #selector(doneButtonTapped),
-        for: .touchUpInside
+      self,
+      action: #selector(doneButtonTapped),
+      for: .touchUpInside
     )
 
     doneButton.accessibilityLabel = "Done"
     doneButton.accessibilityIdentifier = "keyboardDoneButton"
 
     let doneBarButton = UIBarButtonItem(
-        customView: doneButton
+      customView: doneButton
     )
 
     let fixedSpace = UIBarButtonItem(
-        barButtonSystemItem: .fixedSpace,
-        target: nil,
-        action: nil
+      barButtonSystemItem: .fixedSpace,
+      target: nil,
+      action: nil
     )
+
     fixedSpace.width = 16
 
     toolbar.items = [
-        flexSpace,
-        doneBarButton,
-        fixedSpace
+      flexSpace,
+      doneBarButton,
+      fixedSpace
     ]
 
     toolbar.sizeToFit()
 
     return toolbar
-}
+  }
 
-  // MARK: - 🎬 Show & Hide Toolbar ---------------------------------------- //
+  // MARK: - Show Toolbar
 
   private func showToolbar(
     toKeyboardFrame endFrame: CGRect,
@@ -218,43 +282,87 @@ private func createToolbar() -> UIToolbar {
 
     if toolbarWindow == nil {
       let window: UIWindow
-      if #available(iOS 13.0, *),
-        let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
-      {
-        window = UIWindow(windowScene: windowScene)
+
+      if #available(iOS 13.0, *) {
+        let activeScene = UIApplication.shared.connectedScenes
+          .compactMap { $0 as? UIWindowScene }
+          .first { $0.activationState == .foregroundActive }
+
+        if let activeScene = activeScene {
+          window = UIWindow(windowScene: activeScene)
+        } else {
+          window = UIWindow(frame: .zero)
+        }
       } else {
         window = UIWindow(frame: .zero)
       }
 
-      window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue - 1)
+      window.windowLevel = UIWindow.Level(
+        rawValue: UIWindow.Level.alert.rawValue - 1
+      )
+
       window.backgroundColor = .clear
       window.isUserInteractionEnabled = true
+
       toolbarWindow = window
     } else {
-      toolbarWindow?.layer.removeAllAnimations()  // Cancel ongoing hide animation
+      toolbarWindow?.layer.removeAllAnimations()
     }
 
-    guard let toolbarWindow = toolbarWindow, let toolbar = toolbar else { return }
-
-    let screenWidth = UIScreen.main.bounds.width
-    let toolbarHeight = toolbar.frame.height
-    let finalY = endFrame.origin.y - toolbarHeight
-
-    if toolbar.superview == nil {
-      toolbar.frame = CGRect(x: 0, y: 0, width: screenWidth, height: toolbarHeight)
-      toolbarWindow.addSubview(toolbar)
-    }
-
-    // If already visible, just update position (prevent flicker)
-    let isAlreadyVisible = !toolbarWindow.isHidden && toolbarWindow.alpha == 1
-    if isAlreadyVisible {
-      toolbarWindow.frame = CGRect(x: 0, y: finalY, width: screenWidth, height: toolbarHeight)
+    guard
+      let toolbarWindow = toolbarWindow,
+      let toolbar = toolbar
+    else {
       return
     }
 
-    // Fade-in animation
+    let screenWidth = UIScreen.main.bounds.width
+    let toolbarHeight = toolbar.frame.height
+
+    let finalY = endFrame.origin.y - toolbarHeight
+
+    if toolbar.superview == nil {
+      toolbar.frame = CGRect(
+        x: 0,
+        y: 0,
+        width: screenWidth,
+        height: toolbarHeight
+      )
+
+      toolbarWindow.addSubview(toolbar)
+    }
+
+    toolbar.frame = CGRect(
+      x: 0,
+      y: 0,
+      width: screenWidth,
+      height: toolbarHeight
+    )
+
+    // Avoid flickering when the toolbar is already visible.
+    let isAlreadyVisible =
+      !toolbarWindow.isHidden &&
+      toolbarWindow.alpha == 1
+
+    if isAlreadyVisible {
+      toolbarWindow.frame = CGRect(
+        x: 0,
+        y: finalY,
+        width: screenWidth,
+        height: toolbarHeight
+      )
+
+      return
+    }
+
     UIView.performWithoutAnimation {
-      toolbarWindow.frame = CGRect(x: 0, y: finalY, width: screenWidth, height: toolbarHeight)
+      toolbarWindow.frame = CGRect(
+        x: 0,
+        y: finalY,
+        width: screenWidth,
+        height: toolbarHeight
+      )
+
       toolbarWindow.alpha = 0
       toolbarWindow.isHidden = false
     }
@@ -263,35 +371,45 @@ private func createToolbar() -> UIToolbar {
       withDuration: duration,
       delay: 0,
       options: [animationCurve],
-      animations: { toolbarWindow.alpha = 1 },
-      completion: nil)
+      animations: {
+        toolbarWindow.alpha = 1
+      },
+      completion: nil
+    )
   }
 
-  // ************************************************************************ //
+  // MARK: - Hide Toolbar
 
   private func hideToolbar(duration: TimeInterval = 0.25) {
     guard let toolbarWindow = toolbarWindow else { return }
 
     UIView.animate(
       withDuration: duration,
-      animations: { toolbarWindow.alpha = 0 }
+      animations: {
+        toolbarWindow.alpha = 0
+      }
     ) { finished in
-      guard finished else { return }  // Skip if animation was cancelled
+      guard finished else { return }
+
       toolbarWindow.isHidden = true
     }
   }
 
-  // MARK: - 👆 Button Actions --------------------------------------------- //
+  // MARK: - Button Actions
 
   @objc private func doneButtonTapped() {
-    isToolbarActive = false  // Reset on explicit dismiss
+    pendingToolbarRequest = false
+    isToolbarActive = false
+
     UIApplication.shared.sendAction(
       #selector(UIResponder.resignFirstResponder),
-      to: nil, from: nil, for: nil
+      to: nil,
+      from: nil,
+      for: nil
     )
   }
 
-  // MARK: - 🗑️ Deinitialization ------------------------------------------- //
+  // MARK: - Deinitialization
 
   deinit {
     NotificationCenter.default.removeObserver(self)
