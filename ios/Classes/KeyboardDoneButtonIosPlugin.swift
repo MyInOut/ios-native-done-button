@@ -23,6 +23,22 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
   private let buttonHeight: CGFloat = 36
   private let buttonRightPadding: CGFloat = 16
 
+  // Keyboard background approximation from the supplied screenshot.
+  private let keyboardBackgroundColor = UIColor(
+    red: 210.0 / 255.0,
+    green: 211.0 / 255.0,
+    blue: 216.0 / 255.0,
+    alpha: 1.0
+  )
+
+  // MyInOut blue: #0099FF
+  private let myInOutBlue = UIColor(
+    red: 0.0,
+    green: 153.0 / 255.0,
+    blue: 1.0,
+    alpha: 1.0
+  )
+
   // MARK: - Plugin Registration
 
   public static func register(with registrar: FlutterPluginRegistrar) {
@@ -60,8 +76,13 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
   // MARK: - Keyboard Observers
 
   private func registerKeyboardObservers() {
-    guard UIDevice.current.userInterfaceIdiom != .pad else { return }
-    guard !isObserversRegistered else { return }
+    guard UIDevice.current.userInterfaceIdiom != .pad else {
+      return
+    }
+
+    guard !isObserversRegistered else {
+      return
+    }
 
     NotificationCenter.default.addObserver(
       self,
@@ -83,12 +104,13 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
   // MARK: - Show / Hide Requests
 
   private func showDoneButton() {
-    guard UIDevice.current.userInterfaceIdiom != .pad else { return }
+    guard UIDevice.current.userInterfaceIdiom != .pad else {
+      return
+    }
 
     pendingToolbarRequest = true
 
-    // The keyboard might already be visible when Flutter requests
-    // the Done button.
+    // Handle requests made after the keyboard is already visible.
     if keyboardIsVisible && currentKeyboardFrame != .zero {
       isToolbarActive = true
 
@@ -101,7 +123,9 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
   }
 
   private func hideDoneButton() {
-    guard UIDevice.current.userInterfaceIdiom != .pad else { return }
+    guard UIDevice.current.userInterfaceIdiom != .pad else {
+      return
+    }
 
     pendingToolbarRequest = false
     isToolbarActive = false
@@ -187,12 +211,8 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
 
     button.translatesAutoresizingMaskIntoConstraints = false
 
-    button.backgroundColor = UIColor(
-      red: 35.0 / 255.0,
-      green: 103.0 / 255.0,
-      blue: 209.0 / 255.0,
-      alpha: 1.0
-    )
+    // MyInOut blue: #0099FF
+    button.backgroundColor = myInOutBlue
 
     button.setTitle("Done", for: .normal)
     button.setTitleColor(.white, for: .normal)
@@ -205,6 +225,9 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
     button.layer.cornerRadius = 8
     button.layer.masksToBounds = true
 
+    button.contentHorizontalAlignment = .center
+    button.contentVerticalAlignment = .center
+
     button.addTarget(
       self,
       action: #selector(doneButtonTapped),
@@ -215,8 +238,13 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
     button.accessibilityIdentifier = "keyboardDoneButton"
 
     NSLayoutConstraint.activate([
-      button.widthAnchor.constraint(equalToConstant: buttonWidth),
-      button.heightAnchor.constraint(equalToConstant: buttonHeight)
+      button.widthAnchor.constraint(
+        equalToConstant: buttonWidth
+      ),
+
+      button.heightAnchor.constraint(
+        equalToConstant: buttonHeight
+      )
     ])
 
     return button
@@ -229,14 +257,13 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
 
     container.translatesAutoresizingMaskIntoConstraints = false
 
-    container.backgroundColor = UIColor(
-      red: 209.0 / 255.0,
-      green: 211.0 / 255.0,
-      blue: 217.0 / 255.0,
-      alpha: 0.7
-    )
+    // Opaque keyboard-matching background.
+    container.backgroundColor = keyboardBackgroundColor
+    container.isOpaque = true
 
-    container.isOpaque = false
+    // Keep the container rectangular.
+    container.layer.cornerRadius = 0
+    container.layer.masksToBounds = true
 
     let button = createDoneButton()
 
@@ -288,6 +315,8 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
       rawValue: UIWindow.Level.alert.rawValue - 1
     )
 
+    // Keep the window transparent.
+    // Only the toolbar container has an opaque background.
     window.backgroundColor = .clear
     window.isOpaque = false
     window.isUserInteractionEnabled = true
@@ -311,7 +340,9 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
 
       toolbarContainer = container
 
-      guard let rootView = toolbarWindow?.rootViewController?.view else {
+      guard
+        let rootView = toolbarWindow?.rootViewController?.view
+      else {
         return
       }
 
@@ -382,7 +413,9 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
   // MARK: - Hide Toolbar
 
   private func hideToolbar(duration: TimeInterval = 0.25) {
-    guard let toolbarWindow = toolbarWindow else { return }
+    guard let toolbarWindow = toolbarWindow else {
+      return
+    }
 
     toolbarWindow.layer.removeAllAnimations()
 
@@ -392,7 +425,9 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
         toolbarWindow.alpha = 0
       }
     ) { finished in
-      guard finished else { return }
+      guard finished else {
+        return
+      }
 
       toolbarWindow.isHidden = true
     }
