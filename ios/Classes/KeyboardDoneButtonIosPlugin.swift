@@ -132,25 +132,78 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
 
   // MARK: - 🔨 Toolbar Creation ------------------------------------------- //
 
-  private func createToolbar() -> UIToolbar {
+
+private func createToolbar() -> UIToolbar {
     let toolbar = UIToolbar()
     toolbar.barStyle = .default
-    toolbar.autoresizingMask = [.flexibleWidth]  // Handle rotation
+    toolbar.autoresizingMask = [.flexibleWidth]
 
-    let flexSpace = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-    let doneButton = UIBarButtonItem(
-      barButtonSystemItem: .done,
-      target: self,
-      action: #selector(doneButtonTapped)
+    // Flexible space pushes the Done button to the right.
+    let flexSpace = UIBarButtonItem(
+        barButtonSystemItem: .flexibleSpace,
+        target: nil,
+        action: nil
     )
-    let fixedSpace = UIBarButtonItem(barButtonSystemItem: .fixedSpace, target: nil, action: nil)
+
+    // Custom Done button.
+    let doneButton = UIButton(type: .system)
+
+    doneButton.frame = CGRect(
+        x: 0,
+        y: 0,
+        width: 72,
+        height: 36
+    )
+
+    doneButton.setTitle("Done", for: .normal)
+    doneButton.setTitleColor(.white, for: .normal)
+
+    doneButton.titleLabel?.font = UIFont.systemFont(
+        ofSize: 15,
+        weight: .semibold
+    )
+
+    // Replace this with the exact myinout ThemeColors.blue value.
+    doneButton.backgroundColor = UIColor(
+        red: 35.0 / 255.0,
+        green: 103.0 / 255.0,
+        blue: 209.0 / 255.0,
+        alpha: 1.0
+    )
+
+    doneButton.layer.cornerRadius = 8
+    doneButton.clipsToBounds = true
+
+    doneButton.addTarget(
+        self,
+        action: #selector(doneButtonTapped),
+        for: .touchUpInside
+    )
+
+    doneButton.accessibilityLabel = "Done"
+    doneButton.accessibilityIdentifier = "keyboardDoneButton"
+
+    let doneBarButton = UIBarButtonItem(
+        customView: doneButton
+    )
+
+    let fixedSpace = UIBarButtonItem(
+        barButtonSystemItem: .fixedSpace,
+        target: nil,
+        action: nil
+    )
     fixedSpace.width = 16
 
-    toolbar.items = [flexSpace, doneButton, fixedSpace]
+    toolbar.items = [
+        flexSpace,
+        doneBarButton,
+        fixedSpace
+    ]
+
     toolbar.sizeToFit()
 
     return toolbar
-  }
+}
 
   // MARK: - 🎬 Show & Hide Toolbar ---------------------------------------- //
 
