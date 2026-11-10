@@ -229,9 +229,14 @@ public class KeyboardDoneButtonIosPlugin: NSObject, FlutterPlugin {
 
     container.translatesAutoresizingMaskIntoConstraints = false
 
-    // Diagnostic background.
-    container.backgroundColor = .systemBackground
-    container.isOpaque = true
+    container.backgroundColor = UIColor(
+      red: 209.0 / 255.0,
+      green: 211.0 / 255.0,
+      blue: 217.0 / 255.0,
+      alpha: 0.7
+    )
+
+    container.isOpaque = false
 
     let button = createDoneButton()
 
