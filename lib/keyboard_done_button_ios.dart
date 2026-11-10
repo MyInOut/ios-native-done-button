@@ -64,6 +64,13 @@ class _KeyboardToolbarFieldState extends State<KeyboardToolbarField> {
   void initState() {
     super.initState();
     _initFocusNode();
+
+    // Handle the case where the field is already focused.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _updateToolbar();
+      }
+    });
   }
 
   /// Initializes the FocusNode and registers its listener.
@@ -103,14 +110,23 @@ class _KeyboardToolbarFieldState extends State<KeyboardToolbarField> {
 
   /// Called whenever the FocusNode changes.
   void _onFocusChange() {
+    debugPrint('[KeyboardToolbarField] Focus changed');
     _updateToolbar();
   }
 
   /// Updates native toolbar visibility based on the current focus state.
   void _updateToolbar() {
+    debugPrint(
+      '[KeyboardToolbarField] '
+          'hasFocus: ${_focusNode.hasFocus}, '
+          'showToolbar: ${widget.showToolbar}',
+    );
+
     if (_focusNode.hasFocus && widget.showToolbar) {
+      debugPrint('[KeyboardToolbarField] Requesting SHOW');
       KeyboardToolbar.show();
     } else {
+      debugPrint('[KeyboardToolbarField] Requesting HIDE');
       KeyboardToolbar.hide();
     }
   }
